@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<h2 class="sr-only">Painel interativo de progresso do pipeline de Machine Learning — da ingestão de dados até a visualização de modelos</h2>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg-primary, #f5f5f5);
+    color: var(--text-primary, #1a1a1a);
+    min-height: 100vh;
+    padding: 20px;
+  }
+
+  .header {
+    text-align: center;
+    margin-bottom: 24px;
+  }
+  .header h1 {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--text-primary, #111);
+    letter-spacing: -0.02em;
+  }
+  .header p {
+    font-size: 0.8rem;
+    color: var(--text-secondary, #666);
+    margin-top: 4px;
+  }
+
+  /* Progress bar */
+  .progress-bar-wrap {
+    background: var(--bg-secondary, #e5e5e5);
+    border-radius: 99px;
+    height: 6px;
+    margin: 12px auto;
+    max-width: 480px;
+    overflow: hidden;
+  }
+  .progress-bar-fill {
+    height: 100%;
+    border-radius: 99px;
+    background: #22c55e;
+    transition: width 0.4s ease;
+  }
+  .progress-label {
+    font-size: 0.75rem;
+    color: var(--text-secondary, #666);
+    text-align: center;
+    margin-top: 4px;
+  }
+
+  /* Pipeline layout */
+  .pipeline {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+    max-width: 680px;
+    margin: 0 auto;
+  }
+
+  /* Phase card */
+  .phase {
+    width: 100%;
+    position: relative;
+  }
+
+  .phase-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border-radius: 10px;
+    cursor: pointer;
+    user-select: none;
+    border: 2px solid transparent;
+    transition: all 0.2s;
+    background: var(--bg-card, #fff);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+  }
+  .phase-header:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
+
+  .phase-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    flex-shrink: 0;
+    transition: background 0.2s;
+  }
+
+  .phase-info { flex: 1; min-width: 0; }
+  .phase-name {
+    font-size: 0.9rem;
+    font-weight: 600;
+    line-height: 1.2;
+  }
+  .phase-desc {
+    font-size: 0.72rem;
+    color: var(--text-secondary, #777);
+    margin-top: 1px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .phase-status-btn {
+    padding: 4px 10px;
+    border-radius: 99px;
+    border: none;
+    font-size: 0.7rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    flex-shrink: 0;
+  }
+
+  .chevron {
+    font-size: 0.7rem;
+    color: var(--text-secondary, #aaa);
+    transition: transform 0.2s;
+    flex-shrink: 0;
+  }
+  .phase.open .chevron { transform: rotate(180deg); }
+
+  /* Sub-steps */
+  .substeps {
+    display: none;
+    flex-direction: column;
+    gap: 2px;
+    margin: 4px 0 4px 20px;
+    padding: 8px 12px;
+    border-left: 2px solid var(--border, #e0e0e0);
+  }
+  .phase.open .substeps { display: flex; }
+
+  .substep {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 7px 8px;
+    border-radius: 7px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .substep:hover { background: var(--bg-hover, rgba(0,0,0,0.04)); }
+
+  .substep-check {
+    width: 18px;
+    height: 18px;
+    border-radius: 4px;
+    border: 2px solid #ccc;
+    flex-shrink: 0;
+    margin-top: 1px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.65rem;
+    color: #fff;
+    transition: all 0.2s;
+  }
+
+  .substep-text { flex: 1; }
+  .substep-label {
+    font-size: 0.8rem;
+    font-weight: 500;
+    line-height: 1.3;
+  }
+  .substep-note {
+    font-size: 0.68rem;
+    color: var(--text-secondary, #888);
+    margin-top: 1px;
+  }
+
+  /* Connector arrow */
+  .connector {
+    width: 2px;
+    height: 20px;
+    background: var(--border, #ddd);
+    margin: 0 auto;
+    position: relative;
+  }
+  .connector::after {
+    content: '';
+    position: absolute;
+    bottom: -5px;
+    left: 50%;
+    transform: translateX(-50%);
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 6px solid var(--border, #ddd);
+  }
+
+  /* Status colors */
+  /* todo */
+  .phase[data-status="todo"] .phase-header { border-color: transparent; }
+  .phase[data-status="todo"] .phase-icon { background: #f0f0f0; }
+  .phase[data-status="todo"] .phase-status-btn { background: #f0f0f0; color: #888; }
+  .phase[data-status="todo"] .phase-status-btn:hover { background: #e0e0e0; }
+
+  /* doing */
+  .phase[data-status="doing"] .phase-header { border-color: #f59e0b; }
+  .phase[data-status="doing"] .phase-icon { background: #fef3c7; }
+  .phase[data-status="doing"] .phase-status-btn { background: #fef3c7; color: #b45309; }
+  .phase[data-status="doing"] .phase-status-btn:hover { background: #fde68a; }
+
+  /* done */
+  .phase[data-status="done"] .phase-header { border-color: #22c55e; }
+  .phase[data-status="done"] .phase-icon { background: #dcfce7; }
+  .phase[data-status="done"] .phase-status-btn { background: #dcfce7; color: #15803d; }
+  .phase[data-status="done"] .phase-status-btn:hover { background: #bbf7d0; }
+
+  /* substep states */
+  .substep[data-done="true"] .substep-check { background: #22c55e; border-color: #22c55e; }
+  .substep[data-done="true"] .substep-label { text-decoration: line-through; color: #aaa; }
+
+  /* Notes textarea */
+  .notes-wrap {
+    margin-top: 8px;
+  }
+  .notes-textarea {
+    width: 100%;
+    border: 1px solid var(--border, #e0e0e0);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 0.75rem;
+    font-family: inherit;
+    background: var(--bg-primary, #f9f9f9);
+    color: var(--text-primary, #333);
+    resize: vertical;
+    min-height: 48px;
+    outline: none;
+    transition: border 0.15s;
+  }
+  .notes-textarea:focus { border-color: #6366f1; }
+  .notes-label {
+    font-size: 0.68rem;
+    color: var(--text-secondary, #999);
+    margin-bottom: 3px;
+    display: block;
+  }
+
+  /* Legend */
+  .legend {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    margin-bottom: 18px;
+    flex-wrap: wrap;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.72rem;
+    color: var(--text-secondary, #666);
+  }
+  .legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+
+  /* Reset btn */
+  .reset-btn {
+    display: block;
+    margin: 20px auto 0;
+    padding: 6px 18px;
+    border: 1px solid #ddd;
+    background: transparent;
+    border-radius: 99px;
+    font-size: 0.72rem;
+    cursor: pointer;
+    color: var(--text-secondary, #888);
+    transition: all 0.2s;
+  }
+  .reset-btn:hover { border-color: #aaa; color: #555; }
+
+  @media (max-width: 500px) {
+    .phase-desc { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🤖 Pipeline de Machine Learning</h1>
+  <p>Clique nas fases para expandir • Marque sub-etapas concluídas • Clique no status para alternar</p>
+  <div class="progress-bar-wrap">
+    <div class="progress-bar-fill" id="progressFill" style="width:0%"></div>
+  </div>
+  <div class="progress-label" id="progressLabel">0 de 0 etapas concluídas</div>
+</div>
+
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot" style="background:#ccc"></div> A fazer</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#f59e0b"></div> Em andamento</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#22c55e"></div> Concluído</div>
+</div>
+
+<div class="pipeline" id="pipeline"></div>
+
+<button class="reset-btn" onclick="resetAll()">↺ Reiniciar progresso</button>
+
+<script>
+const PHASES = [
+  {
+    id: "ingestion",
+    icon: "📥",
+    name: "1. Ingestão de Dados",
+    desc: "Carregar e inspecionar a base bruta",
+    substeps: [
+      { id: "load", label: "Carregar o arquivo (CSV, Excel, JSON, SQL...)", note: "pd.read_csv(), pd.read_excel(), sqlalchemy..." },
+      { id: "shape", label: "Verificar shape e tipos de dados", note: "df.shape, df.dtypes, df.info()" },
+      { id: "head", label: "Visualizar primeiras/últimas linhas", note: "df.head(), df.tail()" },
+      { id: "schema", label: "Entender o schema e o domínio dos dados", note: "Quais colunas? O que cada uma significa?" },
+    ]
+  },
+  {
+    id: "eda",
+    icon: "🔍",
+    name: "2. Análise Exploratória (EDA)",
+    desc: "Entender distribuições, correlações e padrões",
+    substeps: [
+      { id: "stats", label: "Estatísticas descritivas", note: "df.describe(), mean, std, min, max, quartis" },
+      { id: "dist", label: "Distribuições das variáveis", note: "Histogramas, boxplots, violinplots" },
+      { id: "corr", label: "Análise de correlação", note: "Heatmap de correlação, scatter plots" },
+      { id: "target", label: "Análise da variável-alvo", note: "Distribuição, balanceamento, skewness" },
+      { id: "categ", label: "Análise de variáveis categóricas", note: "Value counts, frequências" },
+    ]
+  },
+  {
+    id: "quality",
+    icon: "🧹",
+    name: "3. Avaliação de Qualidade",
+    desc: "Mapear problemas na base de dados",
+    substeps: [
+      { id: "missing", label: "Checar valores ausentes (NaN/null)", note: "df.isnull().sum(), heatmap de nulos" },
+      { id: "dupl", label: "Detectar linhas duplicadas", note: "df.duplicated().sum()" },
+      { id: "outliers", label: "Identificar outliers", note: "IQR, Z-score, boxplots" },
+      { id: "inconsist", label: "Detectar inconsistências e erros", note: "Typos, valores impossíveis, formatos errados" },
+      { id: "leakage", label: "Checar possível data leakage", note: "Colunas que 'vazam' o futuro para o modelo" },
+    ]
+  },
+  {
+    id: "cleaning",
+    icon: "🛁",
+    name: "4. Limpeza de Dados",
+    desc: "Corrigir, imputar e remover problemas",
+    substeps: [
+      { id: "miss_treat", label: "Tratar valores ausentes", note: "Imputação (média, mediana, KNN) ou remoção" },
+      { id: "dup_rem", label: "Remover duplicatas", note: "df.drop_duplicates()" },
+      { id: "out_treat", label: "Tratar outliers", note: "Winsorize, remoção ou transformação" },
+      { id: "types", label: "Corrigir tipos de dados", note: "Converter strings para datetime, int, float..." },
+      { id: "fix_vals", label: "Corrigir valores inconsistentes", note: "Padronizar categorias, corrigir typos" },
+    ]
+  },
+  {
+    id: "feature_eng",
+    icon: "⚙️",
+    name: "5. Feature Engineering",
+    desc: "Criar e transformar variáveis para o modelo",
+    substeps: [
+      { id: "new_feat", label: "Criar novas features", note: "Combinações, razões, agregações temporais..." },
+      { id: "transform", label: "Transformar variáveis numéricas", note: "Log, sqrt, Box-Cox para normalizar distribuição" },
+      { id: "encode", label: "Codificar variáveis categóricas", note: "One-Hot Encoding, Label Encoding, Target Encoding" },
+      { id: "datetime", label: "Extrair features de data/hora", note: "Ano, mês, dia da semana, hora, sazonalidade" },
+      { id: "feat_cross", label: "Criar interações entre features", note: "Produto, razão ou combinação de colunas" },
+    ]
+  },
+  {
+    id: "preproc",
+    icon: "⚖️",
+    name: "6. Pré-processamento",
+    desc: "Preparar os dados para o modelo",
+    substeps: [
+      { id: "feat_sel", label: "Seleção de features", note: "Filter, Wrapper, Embedded (RFE, L1, importância)" },
+      { id: "split", label: "Dividir em treino/validação/teste", note: "train_test_split(), estratificação se necessário" },
+      { id: "scale", label: "Normalização / Padronização", note: "StandardScaler, MinMaxScaler, RobustScaler" },
+      { id: "imbalance", label: "Tratar desbalanceamento de classes", note: "SMOTE, undersampling, class_weight (se classificação)" },
+      { id: "pipeline_sk", label: "Montar Pipeline sklearn", note: "Pipeline([('scaler',...), ('model',...)]) para evitar leakage" },
+    ]
+  },
+  {
+    id: "modeling",
+    icon: "🧠",
+    name: "7. Modelagem",
+    desc: "Selecionar, treinar e ajustar modelos",
+    substeps: [
+      { id: "baseline", label: "Definir baseline simples", note: "Média, moda, regra trivial — ponto de comparação" },
+      { id: "model_choice", label: "Escolher algoritmos candidatos", note: "Regressão, Árvores, Gradient Boosting, Redes Neurais..." },
+      { id: "cv", label: "Validação cruzada (Cross-Validation)", note: "KFold, StratifiedKFold, TimeSeriesSplit" },
+      { id: "hpt", label: "Otimização de hiperparâmetros", note: "GridSearch, RandomSearch, Optuna, BayesSearch" },
+      { id: "ensemble", label: "Explorar ensemble / stacking", note: "VotingClassifier, StackingRegressor..." },
+    ]
+  },
+  {
+    id: "evaluation",
+    icon: "📊",
+    name: "8. Avaliação do Modelo",
+    desc: "Medir e comparar desempenho",
+    substeps: [
+      { id: "metrics", label: "Calcular métricas adequadas", note: "Clasif: F1, AUC-ROC, Precisão/Recall | Reg: RMSE, MAE, R²" },
+      { id: "conf_mat", label: "Matriz de confusão (classificação)", note: "Visualizar erros tipo I e II" },
+      { id: "curves", label: "Curvas de aprendizado", note: "Underfitting vs Overfitting, bias-variance tradeoff" },
+      { id: "feat_imp", label: "Importância das features", note: "Feature importance, SHAP values, LIME" },
+      { id: "compare", label: "Comparar modelos e escolher o final", note: "Tabela de métricas, custo computacional, interpretabilidade" },
+    ]
+  },
+  {
+    id: "visualization",
+    icon: "📈",
+    name: "9. Visualização & Comunicação",
+    desc: "Apresentar resultados e insights",
+    substeps: [
+      { id: "pred_vs_actual", label: "Predições vs Valores Reais", note: "Scatter plot, linha de identidade (regressão)" },
+      { id: "shap_viz", label: "Visualizar SHAP / explicabilidade", note: "Summary plot, waterfall, dependence plots" },
+      { id: "dashboard", label: "Criar dashboard interativo", note: "Plotly, Streamlit, Dash, Power BI..." },
+      { id: "report", label: "Documentar resultados e insights", note: "Relatório final, conclusões, limitações, próximos passos" },
+      { id: "deploy_plan", label: "Planejar deploy / monitoramento", note: "MLflow, endpoint API, detecção de drift" },
+    ]
+  },
+];
+
+const STATUS_CYCLE = ["todo", "doing", "done"];
+const STATUS_LABELS = { todo: "A fazer", doing: "Em andamento", done: "Concluído" };
+
+// Load from localStorage
+function loadState() {
+  try { return JSON.parse(localStorage.getItem("ml_pipeline_state") || "{}"); } catch(e) { return {}; }
+}
+function saveState(state) {
+  try { localStorage.setItem("ml_pipeline_state", JSON.stringify(state)); } catch(e) {}
+}
+
+let state = loadState();
+
+function getPhaseStatus(phaseId) { return (state[phaseId] && state[phaseId].status) || "todo"; }
+function getSubstepDone(phaseId, subId) { return !!(state[phaseId] && state[phaseId].substeps && state[phaseId].substeps[subId]); }
+function getNotes(phaseId) { return (state[phaseId] && state[phaseId].notes) || ""; }
+
+function setPhaseStatus(phaseId, status) {
+  if (!state[phaseId]) state[phaseId] = {};
+  state[phaseId].status = status;
+  saveState(state);
+}
+function toggleSubstep(phaseId, subId) {
+  if (!state[phaseId]) state[phaseId] = {};
+  if (!state[phaseId].substeps) state[phaseId].substeps = {};
+  state[phaseId].substeps[subId] = !state[phaseId].substeps[subId];
+  saveState(state);
+}
+function setNotes(phaseId, notes) {
+  if (!state[phaseId]) state[phaseId] = {};
+  state[phaseId].notes = notes;
+  saveState(state);
+}
+
+function updateProgress() {
+  let total = 0, done = 0;
+  PHASES.forEach(p => {
+    p.substeps.forEach(s => {
+      total++;
+      if (getSubstepDone(p.id, s.id)) done++;
+    });
+  });
+  const pct = total ? Math.round(done / total * 100) : 0;
+  document.getElementById("progressFill").style.width = pct + "%";
+  document.getElementById("progressLabel").textContent = `${done} de ${total} sub-etapas concluídas (${pct}%)`;
+}
+
+function render() {
+  const pipeline = document.getElementById("pipeline");
+  pipeline.innerHTML = "";
+
+  PHASES.forEach((phase, idx) => {
+    const status = getPhaseStatus(phase.id);
+    const isOpen = state[phase.id] && state[phase.id].open;
+
+    // Phase card
+    const phaseEl = document.createElement("div");
+    phaseEl.className = "phase" + (isOpen ? " open" : "");
+    phaseEl.dataset.status = status;
+
+    phaseEl.innerHTML = `
+      <div class="phase-header" onclick="toggleOpen('${phase.id}')">
+        <div class="phase-icon">${phase.icon}</div>
+        <div class="phase-info">
+          <div class="phase-name">${phase.name}</div>
+          <div class="phase-desc">${phase.desc}</div>
+        </div>
+        <button class="phase-status-btn" onclick="cycleStatus(event, '${phase.id}')">${STATUS_LABELS[status]}</button>
+        <span class="chevron">▼</span>
+      </div>
+      <div class="substeps">
+        ${phase.substeps.map(s => {
+          const done = getSubstepDone(phase.id, s.id);
+          return `<div class="substep" data-done="${done}" onclick="handleSubstep('${phase.id}','${s.id}')">
+            <div class="substep-check">${done ? "✓" : ""}</div>
+            <div class="substep-text">
+              <div class="substep-label">${s.label}</div>
+              <div class="substep-note">${s.note}</div>
+            </div>
+          </div>`;
+        }).join("")}
+        <div class="notes-wrap">
+          <span class="notes-label">📝 Notas desta fase</span>
+          <textarea class="notes-textarea" placeholder="Adicione notas, links, comandos utilizados..." onclick="event.stopPropagation()" oninput="handleNotes('${phase.id}', this.value)">${getNotes(phase.id)}</textarea>
+        </div>
+      </div>
+    `;
+
+    pipeline.appendChild(phaseEl);
+
+    // Connector (not after last)
+    if (idx < PHASES.length - 1) {
+      const conn = document.createElement("div");
+      conn.className = "connector";
+      pipeline.appendChild(conn);
+    }
+  });
+
+  updateProgress();
+}
+
+function toggleOpen(phaseId) {
+  if (!state[phaseId]) state[phaseId] = {};
+  state[phaseId].open = !state[phaseId].open;
+  saveState(state);
+  render();
+}
+
+function cycleStatus(event, phaseId) {
+  event.stopPropagation();
+  const current = getPhaseStatus(phaseId);
+  const idx = STATUS_CYCLE.indexOf(current);
+  const next = STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length];
+  setPhaseStatus(phaseId, next);
+  render();
+}
+
+function handleSubstep(phaseId, subId) {
+  toggleSubstep(phaseId, subId);
+  render();
+}
+
+function handleNotes(phaseId, value) {
+  setNotes(phaseId, value);
+}
+
+function resetAll() {
+  if (confirm("Reiniciar todo o progresso?")) {
+    state = {};
+    saveState(state);
+    render();
+  }
+}
+
+render();
+</script>
+</body>
+</html>
