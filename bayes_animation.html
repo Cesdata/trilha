@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Teorema de Bayes — Risco de Crédito</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #f5f5f7;
+    color: #111;
+    min-height: 100vh;
+    padding: 28px 16px;
+  }
+  .wrap { max-width: 640px; margin: 0 auto; }
+  h1 { font-size: 1.1rem; font-weight: 600; margin-bottom: 4px; }
+  .sub { font-size: 0.8rem; color: #666; margin-bottom: 24px; }
+
+  .equation {
+    background: #fff; border: 1px solid #e0e0e0;
+    border-radius: 10px; padding: 12px 16px;
+    margin-bottom: 22px; font-size: 13px; color: #444; line-height: 2;
+    text-align: center;
+  }
+  .equation b { color: #4B3FCC; }
+
+  .prob-card {
+    background: #fff; border-radius: 14px;
+    padding: 24px 20px 20px;
+    border: 1.5px solid #e0e0e0;
+    margin-bottom: 18px;
+    text-align: center;
+  }
+  .prob-label { font-size: 12px; color: #888; margin-bottom: 6px; letter-spacing: .5px; text-transform: uppercase; }
+  .prob-value {
+    font-size: 3.2rem; font-weight: 700; margin-bottom: 18px;
+    transition: color .6s;
+  }
+
+  /* Risk bar */
+  .risk-bar-wrap {
+    height: 14px; border-radius: 99px;
+    background: linear-gradient(to right, #1D9E75, #f5c842, #e05c3a);
+    position: relative; margin-bottom: 0;
+  }
+  .risk-needle {
+    position: absolute; top: -6px;
+    width: 4px; height: 26px;
+    background: #111; border-radius: 2px;
+    transform: translateX(-50%);
+    transition: left 1s cubic-bezier(.4,0,.2,1);
+  }
+  /* Cutoff marker */
+  .cutoff-line {
+    position: absolute; top: -4px; bottom: -4px;
+    width: 2px; background: #333;
+    transform: translateX(-50%);
+  }
+  .cutoff-tag {
+    position: absolute; top: -22px;
+    transform: translateX(-50%);
+    font-size: 10px; font-weight: 700; color: #333;
+    background: #fff; border: 1px solid #ccc;
+    border-radius: 4px; padding: 1px 5px;
+    white-space: nowrap;
+  }
+  /* Zone labels row */
+  .zone-row {
+    display: flex; margin-top: 6px; font-size: 11px; font-weight: 600;
+  }
+  .zone-aprovado {
+    color: #1D9E75; text-align: left;
+  }
+  .zone-recusado {
+    color: #e05c3a; text-align: right; margin-left: auto;
+  }
+
+  .decision {
+    display: inline-block; margin-top: 14px;
+    padding: 6px 18px; border-radius: 99px;
+    font-size: 13px; font-weight: 600;
+    opacity: 0; transition: opacity .6s;
+  }
+  .decision.show { opacity: 1; }
+  .decision.aprovado { background: #d4f5e9; color: #1D9E75; }
+  .decision.recusado { background: #fde8e3; color: #c0392b; }
+
+  .feed-label { font-size: 13px; color: #555; margin-bottom: 10px; }
+  .feed { display: flex; flex-direction: column; gap: 10px; margin-bottom: 22px; min-height: 260px; }
+  .info-card {
+    display: flex; align-items: center; gap: 12px;
+    background: #fff; border-radius: 10px;
+    padding: 12px 14px;
+    border-left: 4px solid #ccc;
+    opacity: 0; transform: translateY(10px);
+    transition: opacity .5s, transform .5s;
+  }
+  .info-card.show { opacity: 1; transform: translateY(0); }
+  .info-card.pos { border-left-color: #1D9E75; }
+  .info-card.neg { border-left-color: #e05c3a; }
+  .info-icon { font-size: 1.3rem; flex-shrink: 0; }
+  .info-text { flex: 1; }
+  .info-title { font-size: 13px; font-weight: 600; color: #111; }
+  .info-sub { font-size: 12px; color: #777; margin-top: 2px; }
+  .info-delta { font-size: 13px; font-weight: 700; flex-shrink: 0; }
+  .info-delta.pos { color: #1D9E75; }
+  .info-delta.neg { color: #e05c3a; }
+
+  .metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 22px; }
+  .mc { background: #ebebed; border-radius: 10px; padding: 12px 14px; }
+  .mc-lbl { font-size: 11px; color: #777; margin-bottom: 3px; }
+  .mc-val { font-size: 1.2rem; font-weight: 700; color: #111; }
+
+  .cycle-note { font-size: 12px; color: #aaa; text-align: center; margin-top: 10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Teorema de Bayes — Risco de Crédito</h1>
+  <p class="sub">Como a probabilidade de inadimplência se atualiza conforme novas informações chegam</p>
+
+  <div class="equation">
+    <b>P(A|B) = P(B|A) · P(A) / P(B)</b>
+    &nbsp;·&nbsp; Probabilidade a priori → nova evidência → probabilidade a posteriori
+  </div>
+
+  <div class="prob-card">
+    <p class="prob-label">Probabilidade de inadimplência</p>
+    <div class="prob-value" id="probVal">5.0%</div>
+
+    <div class="risk-bar-wrap" id="riskBar">
+      <div class="risk-needle" id="needle" style="left:10%"></div>
+      <div class="cutoff-line" id="cutoff" style="left:6%">
+        <div class="cutoff-tag">corte 3%</div>
+      </div>
+    </div>
+    <div class="zone-row">
+      <span class="zone-aprovado">✓ Abaixo de 3% — Aprovado</span>
+      <span class="zone-recusado">Acima de 3% — Recusado ✗</span>
+    </div>
+    <div class="decision" id="decision">—</div>
+  </div>
+
+  <div class="metrics">
+    <div class="mc">
+      <p class="mc-lbl">Probabilidade inicial (a priori)</p>
+      <p class="mc-val">5.0%</p>
+    </div>
+    <div class="mc">
+      <p class="mc-lbl">Probabilidade atual (a posteriori)</p>
+      <p class="mc-val" id="mPost">5.0%</p>
+    </div>
+  </div>
+
+  <p class="feed-label">Informações recebidas pelo banco</p>
+  <div class="feed" id="feed"></div>
+
+  <p class="cycle-note" id="cycleNote">A animação reinicia automaticamente</p>
+</div>
+
+<script>
+const CUTOFF = 3.0; // %
+const MAX_BAR = 50; // % shown as 100% of bar width
+
+const infos = [
+  { title: 'Renda estável comprovada',        sub: 'Emprego formal há mais de 2 anos',   type: 'pos', icon: '💼', newProb: 3.2, delta: -1.8 },
+  { title: 'Score de crédito alto',            sub: 'Acima de 750 pontos',                type: 'pos', icon: '📊', newProb: 1.9, delta: -1.3 },
+  { title: 'Sem dívidas ativas',               sub: 'Nenhuma pendência em aberto',        type: 'pos', icon: '✅', newProb: 1.1, delta: -0.8 },
+  { title: 'Dívida antiga registrada',         sub: 'Atraso de 60 dias há 3 anos, quitada', type: 'neg', icon: '⚠️', newProb: 2.3, delta: +1.2 },
+  { title: 'Tempo de relacionamento',          sub: 'Cliente do banco há mais de 5 anos', type: 'pos', icon: '🏦', newProb: 1.4, delta: -0.9 },
+  { title: 'Patrimônio declarado',             sub: 'Imóvel próprio quitado',             type: 'pos', icon: '🏠', newProb: 0.8, delta: -0.6 },
+];
+
+const probValEl  = document.getElementById('probVal');
+const needleEl   = document.getElementById('needle');
+const mPostEl    = document.getElementById('mPost');
+const feedEl     = document.getElementById('feed');
+const decisionEl = document.getElementById('decision');
+
+// Position cutoff marker
+document.getElementById('cutoff').style.left = (CUTOFF / MAX_BAR * 100) + '%';
+
+function setProb(p) {
+  probValEl.textContent = p.toFixed(1) + '%';
+  probValEl.style.color = p < CUTOFF ? '#1D9E75' : '#e05c3a';
+  needleEl.style.left = Math.min(p / MAX_BAR * 100, 99) + '%';
+  mPostEl.textContent = p.toFixed(1) + '%';
+}
+
+function reset() {
+  feedEl.innerHTML = '';
+  decisionEl.className = 'decision';
+  setProb(5.0);
+}
+
+function runCycle() {
+  reset();
+  let step = 0;
+
+  const tick = setInterval(() => {
+    const info = infos[step];
+    const card = document.createElement('div');
+    card.className = 'info-card ' + info.type;
+    card.innerHTML = `
+      <div class="info-icon">${info.icon}</div>
+      <div class="info-text">
+        <div class="info-title">${info.title}</div>
+        <div class="info-sub">${info.sub}</div>
+      </div>
+      <div class="info-delta ${info.type}">${info.delta > 0 ? '+' : ''}${info.delta.toFixed(1)}%</div>
+    `;
+    feedEl.appendChild(card);
+    requestAnimationFrame(() => requestAnimationFrame(() => card.classList.add('show')));
+
+    setProb(info.newProb);
+
+    step++;
+    if (step >= infos.length) {
+      clearInterval(tick);
+      const finalProb = infos[infos.length - 1].newProb;
+      const aprovado = finalProb < CUTOFF;
+      setTimeout(() => {
+        decisionEl.textContent = aprovado ? '✓ Crédito aprovado' : '✗ Crédito recusado';
+        decisionEl.className = 'decision show ' + (aprovado ? 'aprovado' : 'recusado');
+        // Restart after pause
+        setTimeout(runCycle, 4000);
+      }, 800);
+    }
+  }, 1800);
+}
+
+runCycle();
+</script>
+</body>
+</html>
