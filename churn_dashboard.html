@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Churn Monitor — ML Dashboard</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #f0f2f5;
+    color: #111;
+    min-height: 100vh;
+  }
+
+  /* Header */
+  .header {
+    background: #1a1f36;
+    color: #fff;
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .header-title { font-size: 15px; font-weight: 600; letter-spacing: .3px; }
+  .header-sub { font-size: 11px; color: #9ca3c8; margin-top: 2px; }
+  .header-badge {
+    background: #4B3FCC; color: #fff;
+    font-size: 11px; font-weight: 600;
+    padding: 4px 10px; border-radius: 99px;
+  }
+  .live-dot {
+    display: inline-block; width: 7px; height: 7px;
+    background: #10b981; border-radius: 50%;
+    margin-right: 5px;
+    animation: pulse 1.5s infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+  .wrap { padding: 20px 24px; max-width: 900px; margin: 0 auto; }
+
+  /* KPI Cards */
+  .kpi-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; margin-bottom: 20px; }
+  .kpi {
+    background: #fff; border-radius: 10px;
+    padding: 14px 16px;
+    border-top: 3px solid #e5e7eb;
+    transition: border-color .4s;
+  }
+  .kpi.danger { border-top-color: #ef4444; }
+  .kpi.warning { border-top-color: #f59e0b; }
+  .kpi.success { border-top-color: #10b981; }
+  .kpi.primary { border-top-color: #4B3FCC; }
+  .kpi-lbl { font-size: 11px; color: #888; margin-bottom: 6px; text-transform: uppercase; letter-spacing: .4px; }
+  .kpi-val { font-size: 1.6rem; font-weight: 700; color: #111; transition: color .4s; }
+  .kpi-sub { font-size: 11px; color: #aaa; margin-top: 3px; }
+
+  /* Client grid */
+  .section-title { font-size: 13px; font-weight: 600; color: #555; margin-bottom: 10px; text-transform: uppercase; letter-spacing: .4px; }
+  .grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin-bottom: 20px; }
+
+  .client-card {
+    background: #fff; border-radius: 10px;
+    padding: 12px 14px;
+    border-left: 4px solid #e5e7eb;
+    transition: border-color .5s, box-shadow .5s;
+    position: relative; overflow: hidden;
+  }
+  .client-card.low  { border-left-color: #10b981; }
+  .client-card.mid  { border-left-color: #f59e0b; }
+  .client-card.high { border-left-color: #ef4444; box-shadow: 0 0 0 2px rgba(239,68,68,.1); }
+  .client-card.analyzing { border-left-color: #c7c9d9; }
+
+  .card-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .client-name { font-size: 13px; font-weight: 600; color: #111; }
+  .seg-badge {
+    font-size: 10px; font-weight: 600; padding: 2px 7px;
+    border-radius: 99px;
+  }
+  .seg-Premium  { background: #ede9fe; color: #6d28d9; }
+  .seg-Business { background: #dbeafe; color: #1d4ed8; }
+  .seg-Básico   { background: #f3f4f6; color: #6b7280; }
+
+  .risk-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .risk-bar-bg { flex: 1; height: 6px; background: #f0f0f0; border-radius: 99px; overflow: hidden; }
+  .risk-bar-fill { height: 100%; border-radius: 99px; width: 0%; transition: width 1s ease, background .5s; }
+  .risk-pct { font-size: 13px; font-weight: 700; min-width: 38px; text-align: right; transition: color .5s; }
+
+  .status-label { font-size: 11px; font-weight: 600; }
+  .status-low  { color: #10b981; }
+  .status-mid  { color: #f59e0b; }
+  .status-high { color: #ef4444; }
+  .status-analyzing { color: #bbb; }
+
+  /* Skeleton shimmer */
+  .shimmer {
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.2s infinite;
+    border-radius: 4px; height: 10px;
+  }
+  @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+
+  /* Action feed */
+  .feed-wrap { background: #fff; border-radius: 10px; padding: 14px 16px; }
+  .feed-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .feed-list { display: flex; flex-direction: column; gap: 8px; min-height: 80px; }
+  .feed-item {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 8px 10px; border-radius: 8px;
+    background: #fef2f2;
+    opacity: 0; transform: translateX(-10px);
+    transition: opacity .4s, transform .4s;
+    font-size: 12px;
+  }
+  .feed-item.show { opacity: 1; transform: translateX(0); }
+  .feed-icon { font-size: 1rem; flex-shrink: 0; margin-top: 1px; }
+  .feed-name { font-weight: 600; color: #111; }
+  .feed-action { color: #555; margin-top: 1px; }
+  .feed-time { font-size: 10px; color: #aaa; margin-top: 2px; }
+
+  .empty-feed { color: #ccc; font-size: 12px; text-align: center; padding: 20px 0; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <div class="header-title"><span class="live-dot"></span>Churn Monitor</div>
+    <div class="header-sub">Modelo XGBoost · Atualização em tempo real · Base de clientes ativa</div>
+  </div>
+  <div class="header-badge">ML em produção</div>
+</div>
+
+<div class="wrap">
+
+  <div class="kpi-row">
+    <div class="kpi primary">
+      <div class="kpi-lbl">Total de clientes</div>
+      <div class="kpi-val">12</div>
+      <div class="kpi-sub">Monitorados agora</div>
+    </div>
+    <div class="kpi danger" id="kpiRisk">
+      <div class="kpi-lbl">Em risco de churn</div>
+      <div class="kpi-val" id="kpiRiskVal">0</div>
+      <div class="kpi-sub">Prob. acima de 70%</div>
+    </div>
+    <div class="kpi warning" id="kpiRevenue">
+      <div class="kpi-lbl">Receita mensal em risco</div>
+      <div class="kpi-val" id="kpiRevenueVal">R$ 0</div>
+      <div class="kpi-sub">MRR ameaçado</div>
+    </div>
+    <div class="kpi success" id="kpiActions">
+      <div class="kpi-lbl">Ações disparadas</div>
+      <div class="kpi-val" id="kpiActionsVal">0</div>
+      <div class="kpi-sub">Automáticas pelo agente</div>
+    </div>
+  </div>
+
+  <p class="section-title">Análise de risco por cliente</p>
+  <div class="grid" id="grid"></div>
+
+  <p class="section-title">Ações automáticas disparadas</p>
+  <div class="feed-wrap">
+    <div class="feed-list" id="feed">
+      <div class="empty-feed" id="emptyFeed">Aguardando análise...</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const THRESHOLD = 70;
+
+const clients = [
+  { name: 'Ana Silva',       seg: 'Premium',  risk: 82, mrr: 890,  action: 'Oferta de desconto de 15% enviada por e-mail' },
+  { name: 'Carlos Mendes',   seg: 'Básico',   risk: 23, mrr: 120,  action: null },
+  { name: 'Fernanda Costa',  seg: 'Business', risk: 67, mrr: 450,  action: null },
+  { name: 'Ricardo Lima',    seg: 'Básico',   risk: 91, mrr: 150,  action: 'Alerta enviado ao time comercial' },
+  { name: 'Mariana Santos',  seg: 'Premium',  risk: 15, mrr: 890,  action: null },
+  { name: 'Paulo Ferreira',  seg: 'Básico',   risk: 78, mrr: 120,  action: 'Campanha de retenção ativada' },
+  { name: 'Beatriz Oliveira',seg: 'Business', risk: 34, mrr: 450,  action: null },
+  { name: 'Thiago Rocha',    seg: 'Básico',   risk: 55, mrr: 120,  action: null },
+  { name: 'Camila Alves',    seg: 'Premium',  risk: 88, mrr: 890,  action: 'Oferta de upgrade de plano enviada' },
+  { name: 'Diego Martins',   seg: 'Business', risk: 29, mrr: 450,  action: null },
+  { name: 'Juliana Pereira', seg: 'Básico',   risk: 72, mrr: 120,  action: 'Gerente de conta notificado' },
+  { name: 'Rafael Souza',    seg: 'Premium',  risk: 41, mrr: 890,  action: null },
+];
+
+function riskClass(r) { return r >= THRESHOLD ? 'high' : r >= 45 ? 'mid' : 'low'; }
+function riskColor(r) { return r >= THRESHOLD ? '#ef4444' : r >= 45 ? '#f59e0b' : '#10b981'; }
+function riskLabel(r) {
+  if (r >= THRESHOLD) return '<span class="status-label status-high">● Alto risco</span>';
+  if (r >= 45) return '<span class="status-label status-mid">● Risco médio</span>';
+  return '<span class="status-label status-low">● Baixo risco</span>';
+}
+
+// Build skeleton cards
+const grid = document.getElementById('grid');
+const cardEls = clients.map((c, i) => {
+  const el = document.createElement('div');
+  el.className = 'client-card analyzing';
+  el.innerHTML = `
+    <div class="card-top">
+      <span class="client-name">${c.name}</span>
+      <span class="seg-badge seg-${c.seg}">${c.seg}</span>
+    </div>
+    <div class="risk-row">
+      <div class="risk-bar-bg"><div class="risk-bar-fill" id="fill-${i}"></div></div>
+      <span class="risk-pct" id="pct-${i}" style="color:#ccc">—</span>
+    </div>
+    <div id="lbl-${i}"><span class="status-analyzing">Analisando...</span></div>
+  `;
+  grid.appendChild(el);
+  return el;
+});
+
+let atRisk = 0, mrrAtRisk = 0, actionsCount = 0;
+
+function revealCard(i) {
+  const c = clients[i];
+  const el = cardEls[i];
+  const fill = document.getElementById('fill-' + i);
+  const pct  = document.getElementById('pct-'  + i);
+  const lbl  = document.getElementById('lbl-'  + i);
+  const cls  = riskClass(c.risk);
+
+  el.className = 'client-card ' + cls;
+  fill.style.width = c.risk + '%';
+  fill.style.background = riskColor(c.risk);
+  pct.textContent = c.risk + '%';
+  pct.style.color = riskColor(c.risk);
+  lbl.innerHTML = riskLabel(c.risk);
+
+  if (c.risk >= THRESHOLD) {
+    atRisk++;
+    mrrAtRisk += c.mrr;
+    document.getElementById('kpiRiskVal').textContent = atRisk;
+    document.getElementById('kpiRevenueVal').textContent = 'R$ ' + mrrAtRisk.toLocaleString('pt-BR');
+
+    if (c.action) {
+      actionsCount++;
+      document.getElementById('kpiActionsVal').textContent = actionsCount;
+
+      const feed = document.getElementById('feed');
+      const empty = document.getElementById('emptyFeed');
+      if (empty) empty.remove();
+
+      const item = document.createElement('div');
+      item.className = 'feed-item';
+      const now = new Date();
+      const time = now.getHours() + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0');
+      item.innerHTML = `
+        <div class="feed-icon">⚡</div>
+        <div>
+          <div class="feed-name">${c.name} — ${c.risk}% de risco</div>
+          <div class="feed-action">${c.action}</div>
+          <div class="feed-time">${time}</div>
+        </div>
+      `;
+      feed.appendChild(item);
+      requestAnimationFrame(() => requestAnimationFrame(() => item.classList.add('show')));
+    }
+  }
+}
+
+function reset() {
+  atRisk = 0; mrrAtRisk = 0; actionsCount = 0;
+  document.getElementById('kpiRiskVal').textContent = '0';
+  document.getElementById('kpiRevenueVal').textContent = 'R$ 0';
+  document.getElementById('kpiActionsVal').textContent = '0';
+
+  const feed = document.getElementById('feed');
+  feed.innerHTML = '<div class="empty-feed" id="emptyFeed">Aguardando análise...</div>';
+
+  cardEls.forEach((el, i) => {
+    el.className = 'client-card analyzing';
+    document.getElementById('fill-' + i).style.width = '0%';
+    document.getElementById('pct-'  + i).textContent = '—';
+    document.getElementById('pct-'  + i).style.color = '#ccc';
+    document.getElementById('lbl-'  + i).innerHTML = '<span class="status-analyzing">Analisando...</span>';
+  });
+}
+
+function runCycle() {
+  reset();
+  let i = 0;
+  const tick = setInterval(() => {
+    revealCard(i++);
+    if (i >= clients.length) {
+      clearInterval(tick);
+      setTimeout(runCycle, 8000);
+    }
+  }, 2800);
+}
+
+runCycle();
+</script>
+</body>
+</html>
